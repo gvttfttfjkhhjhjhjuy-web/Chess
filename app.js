@@ -6,36 +6,48 @@ var engineReady = false;
 // Stockfish motorunu yükle
 function loadEngine() {
     if (typeof Worker !== "undefined") {
-        stockfish = new Worker('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
-        
-        stockfish.onmessage = function(event) {
-            var line = event.data;
-            console.log(line);
+        try {
+            stockfish = new Worker('https://cdn.jsdelivr.net/npm/stockfish@10.0.2/dist/stockfish.wasm.js');
+            
+            stockfish.onmessage = function(event) {
+                var line = event.data;
+                console.log('Stockfish:', line);
 
-            if (line.includes('readyok')) {
-                engineReady = true;
-                $('#engine-status').text("✅ Aktif");
-                $('#koc-mesaji').text("Motor hazır! İlk hamleni yap, usta bot seni bekliyor.");
-            } else if (line.includes('score cp')) {
-                var score = parseInt(line.split('score cp ')[1].split(' ')[0]) / 100;
-                if (game.turn() === 'b') score = -score;
-                guncelleEvalVisual(score);
-            } else if (line.includes('bestmove')) {
-                var bestMove = line.split('bestmove ')[1].split(' ')[0];
-                if (!game.game_over()) {
-                    game.move(bestMove, { sloppy: true });
-                    board.position(game.fen());
-                    durumGuncelle();
-                    analizBaslat();
+                if (line.includes('readyok')) {
+                    engineReady = true;
+                    $('#engine-status').text("✅ Aktif");
+                    $('#koc-mesaji').text("Motor hazır! İlk hamleni yap, usta bot seni bekliyor.");
+                } else if (line.includes('score cp')) {
+                    var score = parseInt(line.split('score cp ')[1].split(' ')[0]) / 100;
+                    if (game.turn() === 'b') score = -score;
+                    guncelleEvalVisual(score);
+                } else if (line.includes('bestmove')) {
+                    var bestMove = line.split('bestmove ')[1].split(' ')[0];
+                    if (!game.game_over()) {
+                        game.move(bestMove, { sloppy: true });
+                        board.position(game.fen());
+                        durumGuncelle();
+                        analizBaslat();
+                    }
                 }
-            }
-        };
+            };
 
-        stockfish.postMessage('uci');
-        stockfish.postMessage('isready');
+            stockfish.onerror = function(error) {
+                console.error('Worker Error:', error);
+                $('#engine-status').text("❌ Hata").css('color', '#e74c3c');
+                $('#koc-mesaji').text("Motor yüklenirken hata oluştu. Lütfen sayfayı yenileyin.");
+            };
+
+            stockfish.postMessage('uci');
+            stockfish.postMessage('isready');
+        } catch (err) {
+            console.error('Stockfish yükleme hatası:', err);
+            $('#koc-mesaji').text("❌ HATA: Stockfish yüklenemedi. Lütfen sayfayı yenileyin.");
+            $('#engine-status').text("Hatalı").css('color', '#e74c3c');
+        }
     } else {
         $('#koc-mesaji').text("❌ HATA: Tarayıcınız Web Worker desteklemiyor.");
-        $('#engine-status').text("Hatalı").css('color', '#c0392b');
+        $('#engine-status').text("Hatalı").css('color', '#e74c3c');
     }
 }
 
@@ -66,16 +78,18 @@ function onDrop(source, target) {
     durumGuncelle();
     $('#koc-mesaji').text("🤖 Usta Bot hesaplıyor...");
     
-    stockfish.postMessage('position fen ' + game.fen());
-    
-    var zorluk = $('#zorluk-seviyesi').val();
-    stockfish.postMessage('setoption name Skill Level value ' + zorluk);
-    stockfish.postMessage('go depth 15');
+    if (stockfish) {
+        stockfish.postMessage('position fen ' + game.fen());
+        
+        var zorluk = $('#zorluk-seviyesi').val();
+        stockfish.postMessage('setoption name Skill Level value ' + zorluk);
+        stockfish.postMessage('go depth 15');
+    }
 }
 
 // Hamle sonrası analiz başlat
 function analizBaslat() {
-    if (!engineReady || game.game_over()) return;
+    if (!engineReady || game.game_over() || !stockfish) return;
     stockfish.postMessage('position fen ' + game.fen());
     stockfish.postMessage('go depth 12');
 }
@@ -123,5 +137,3 @@ $(document).ready(function() {
     loadEngine();
     durumGuncelle();
 });
-
-    
