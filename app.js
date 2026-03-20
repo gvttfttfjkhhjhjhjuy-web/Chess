@@ -2,12 +2,15 @@ var board = null;
 var game = new Chess();
 var stockfish = null;
 var engineReady = false;
+var engineInitialized = false;
+var lastMoveTime = 0;
 
 // Stockfish motorunu yükle
 function loadEngine() {
     if (typeof Worker !== "undefined") {
         try {
-            stockfish = new Worker('https://cdn.jsdelivr.net/npm/stockfish@10.0.2/dist/stockfish.wasm.js');
+            // ✅ DÜZELTME: Doğru Stockfish URL
+            stockfish = new Worker('https://cdn.jsdelivr.net/npm/stockfish@11/dist/stockfish.js');
             
             stockfish.onmessage = function(event) {
                 var line = event.data;
@@ -15,19 +18,41 @@ function loadEngine() {
 
                 if (line.includes('readyok')) {
                     engineReady = true;
+                    engineInitialized = true;
                     $('#engine-status').text("✅ Aktif");
                     $('#koc-mesaji').text("Motor hazır! İlk hamleni yap, usta bot seni bekliyor.");
                 } else if (line.includes('score cp')) {
-                    var score = parseInt(line.split('score cp ')[1].split(' ')[0]) / 100;
-                    if (game.turn() === 'b') score = -score;
-                    guncelleEvalVisual(score);
+                    // ✅ DÜZELTME: Güvenli string parsing
+                    try {
+                        var parts = line.split('score cp ');
+                        if (parts.length > 1) {
+                            var scoreStr = parts[1].split(' ')[0];
+                            var score = parseInt(scoreStr);
+                            if (!isNaN(score)) {
+                                score = score / 100;
+                                if (game.turn() === 'b') score = -score;
+                                guncelleEvalVisual(score);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Score parsing error:', e);
+                    }
                 } else if (line.includes('bestmove')) {
-                    var bestMove = line.split('bestmove ')[1].split(' ')[0];
-                    if (!game.game_over()) {
-                        game.move(bestMove, { sloppy: true });
-                        board.position(game.fen());
-                        durumGuncelle();
-                        analizBaslat();
+                    try {
+                        var parts = line.split('bestmove ');
+                        if (parts.length > 1) {
+                            var bestMove = parts[1].split(' ')[0];
+                            if (!game.game_over() && bestMove && bestMove.length >= 4) {
+                                var move = game.move(bestMove, { sloppy: true });
+                                if (move) {
+                                    board.position(game.fen());
+                                    durumGuncelle();
+                                    setTimeout(analizBaslat, 500);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Best move error:', e);
                     }
                 }
             };
@@ -38,7 +63,8 @@ function loadEngine() {
                 $('#koc-mesaji').text("Motor yüklenirken hata oluştu. Lütfen sayfayı yenileyin.");
             };
 
-            stockfish.postMessage('uci');
+            // ✅ DÜZELTME: Doğru komut sırası
+            stockfish.postMessage('ucinewgame');
             stockfish.postMessage('isready');
         } catch (err) {
             console.error('Stockfish yükleme hatası:', err);
@@ -53,6 +79,8 @@ function loadEngine() {
 
 // Değerlendirme çubuğunu güncelle
 function guncelleEvalVisual(score) {
+    if (typeof score !== 'number') return;
+    
     $('#eval-text').text(score.toFixed(1));
     var percent = 50 - (score * 5);
     percent = Math.min(Math.max(percent, 5), 95);
@@ -72,68 +100,111 @@ function guncelleEvalVisual(score) {
 function onDrop(source, target) {
     if (!engineReady || game.game_over()) return 'snapback';
 
-    var move = game.move({ from: source, to: target, promotion: 'q' });
-    if (move === null) return 'snapback';
+    try {
+        var move = game.move({ from: source, to: target, promotion: 'q' });
+        if (move === null) return 'snapback';
 
-    durumGuncelle();
-    $('#koc-mesaji').text("🤖 Usta Bot hesaplıyor...");
-    
-    if (stockfish) {
-        stockfish.postMessage('position fen ' + game.fen());
+        durumGuncelle();
+        $('#koc-mesaji').text("🤖 Usta Bot hesaplıyor...");
+        lastMoveTime = Date.now();
         
-        var zorluk = $('#zorluk-seviyesi').val();
-        stockfish.postMessage('setoption name Skill Level value ' + zorluk);
-        stockfish.postMessage('go depth 15');
+        if (stockfish && engineInitialized) {
+            stockfish.postMessage('position fen ' + game.fen());
+            
+            var zorluk = $('#zorluk-seviyesi').val();
+            if (zorluk) {
+                stockfish.postMessage('setoption name Skill Level value ' + zorluk);
+            }
+            stockfish.postMessage('go depth 15');
+        }
+    } catch (e) {
+        console.error('Move error:', e);
+        return 'snapback';
     }
 }
 
 // Hamle sonrası analiz başlat
 function analizBaslat() {
-    if (!engineReady || game.game_over() || !stockfish) return;
-    stockfish.postMessage('position fen ' + game.fen());
-    stockfish.postMessage('go depth 12');
+    if (!engineReady || game.game_over() || !stockfish || !engineInitialized) return;
+    try {
+        stockfish.postMessage('position fen ' + game.fen());
+        stockfish.postMessage('go depth 12');
+    } catch (e) {
+        console.error('Analysis error:', e);
+    }
 }
 
 // Oyun durumunu güncelle
 function durumGuncelle() {
-    if (game.game_over()) {
-        if (game.in_checkmate()) {
-            $('#koc-mesaji').text("🏁 MAT! Oyun bitti.");
-        } else if (game.in_draw()) {
-            $('#koc-mesaji').text("🤝 BERABERE!");
-        } else {
-            $('#koc-mesaji').text("🏁 Oyun bitti.");
+    try {
+        if (game.game_over()) {
+            if (game.in_checkmate()) {
+                $('#koc-mesaji').text("🏁 MAT! Oyun bitti.");
+            } else if (game.in_draw()) {
+                $('#koc-mesaji').text("🤝 BERABERE!");
+            } else {
+                $('#koc-mesaji').text("🏁 Oyun bitti.");
+            }
+            return;
         }
-        return;
+    } catch (e) {
+        console.error('Status update error:', e);
     }
 }
 
 // Yeni oyun başlat
 function yeniOyun() {
-    game.reset();
-    board.start();
-    $('#eval-fill').css('height', '50%');
-    $('#eval-text').text("0.0");
-    $('#koc-mesaji').text("🎮 Yeni oyun başladı. Usta bota karşı stratejini belirle.");
-    durumGuncelle();
-    if (stockfish) stockfish.postMessage('ucinewgame');
+    try {
+        game.reset();
+        board.start();
+        $('#eval-fill').css('height', '50%');
+        $('#eval-text').text("0.0");
+        $('#koc-mesaji').text("🎮 Yeni oyun başladı. Usta bota karşı stratejini belirle.");
+        durumGuncelle();
+        if (stockfish && engineInitialized) {
+            stockfish.postMessage('ucinewgame');
+        }
+    } catch (e) {
+        console.error('New game error:', e);
+    }
 }
 
 // Tahta başlat
 function initBoard() {
-    var config = {
-        draggable: true,
-        position: 'start',
-        onDrop: onDrop,
-        onSnapEnd: function() { board.position(game.fen()) },
-        pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/img/chesspieces/wikipedia/{piece}.png'
-    };
-    board = Chessboard('board', config);
+    try {
+        var config = {
+            draggable: true,
+            position: 'start',
+            onDrop: onDrop,
+            onSnapEnd: function() { 
+                if (board && game) {
+                    board.position(game.fen());
+                }
+            },
+            pieceTheme: 'https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/img/chesspieces/wikipedia/{piece}.png'
+        };
+        board = Chessboard('board', config);
+    } catch (e) {
+        console.error('Board initialization error:', e);
+        $('#koc-mesaji').text("❌ HATA: Tahta başlatılamadı.");
+    }
 }
 
 // Başlangıç
 $(document).ready(function() {
-    initBoard();
-    loadEngine();
-    durumGuncelle();
+    try {
+        if (typeof Chessboard === 'undefined') {
+            throw new Error('Chessboard kütüphanesi yüklenmedi');
+        }
+        if (typeof Chess === 'undefined') {
+            throw new Error('Chess kütüphanesi yüklenmedi');
+        }
+        
+        initBoard();
+        loadEngine();
+        durumGuncelle();
+    } catch (e) {
+        console.error('Initialization error:', e);
+        $('#koc-mesaji').text("❌ HATA: Başlatma sırasında hata oluştu. Konsolu kontrol edin.");
+    }
 });
