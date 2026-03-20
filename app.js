@@ -1,4 +1,4 @@
-Var board = null;
+var board = null;
 var game = new Chess();
 var stockfish = null;
 var engineReady = false;
@@ -123,3 +123,5 @@ $(document).ready(function() {
     loadEngine();
     durumGuncelle();
 });
+
+    
