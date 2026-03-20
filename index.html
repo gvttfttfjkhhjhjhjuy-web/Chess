@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Stockfish şah motoru ile oyna ve analiz et">
+    <meta name="theme-color" content="#1a1a1a">
     <title>Satranç Oyunu - Stockfish Bot</title>
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <link rel="stylesheet" href="styles.css">
@@ -34,14 +36,14 @@
         <aside class="right-panel">
             <div class="controls-box">
                 <h3>Kontroller</h3>
-                <label>Zorluk Seviyesi:</label>
+                <label for="zorluk-seviyesi">Zorluk Seviyesi:</label>
                 <select id="zorluk-seviyesi">
                     <option value="0">Acemi</option>
                     <option value="5">Orta</option>
                     <option value="15">Zor</option>
                     <option value="20" selected>Usta</option>
                 </select>
-                <button id="reset-btn" onclick="yeniOyun()">🔄 Sıfırla</button>
+                <button id="reset-btn" onclick="yeniOyun()" type="button">🔄 Sıfırla</button>
             </div>
         </aside>
     </main>
@@ -52,9 +54,10 @@
         </div>
     </footer>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <!-- Script Yükleme Sırası: jQuery → Chess.js → Chessboard.js → app.js -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj3OJU5yExlq6GSYGSHk7tPFijkP45/L+vb4U9qkbA=" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" integrity="sha512-6SmzlQwSWUO5M/VVaUPKbKtpUjKGj8lzlDhFw5N1VoHOUOjCpEPIkE4uEJe0kHxdxg6zCDqA5hYJjLvHD3nJqQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js" integrity="sha512-QxfTh8MiYHWRc3x5k6r6xv4cIhCIpT5VzxSx+hf9rmPLvDC8KL4rZvY2pLlsXFwBTJcKV3UaFCUChj2z1TAx5w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="app.js"></script>
 </body>
 </html>
